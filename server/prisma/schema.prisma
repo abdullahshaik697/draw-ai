@@ -1,0 +1,45 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  password  String
+  name      String?
+  projects  Project[] @relation("OwnedProjects")
+  shared    Project[] @relation("CollaboratingProjects")
+  comments  Comment[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Project {
+  id            String    @id @default(cuid())
+  title         String
+  data          Json?     // Stores the drawing state
+  ownerId       String
+  owner         User      @relation("OwnedProjects", fields: [ownerId], references: [id])
+  collaborators User[]    @relation("CollaboratingProjects")
+  comments      Comment[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  text      String
+  x         Float
+  y         Float
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id])
+  createdAt DateTime @default(now())
+}
