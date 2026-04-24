@@ -35,6 +35,7 @@ app.get('/api/dashboard', authenticate, async (req: AuthRequest, res) => {
           { collaborators: { some: { id: req.userId } } }
         ]
       },
+      orderBy: { updatedAt: 'desc' },
       include: {
         owner: { select: { name: true, email: true } }
       }
@@ -42,6 +43,71 @@ app.get('/api/dashboard', authenticate, async (req: AuthRequest, res) => {
     res.json(projects);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching projects', error });
+  }
+});
+
+app.post('/api/projects', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { title } = req.body;
+    const project = await prisma.project.create({
+      data: {
+        title: title || 'Untitled Project',
+        ownerId: req.userId!,
+        data: [] // Initial empty canvas
+      }
+    });
+    res.status(201).json(project);
+  } catch (error) {
+    res.status(500).json({ message: 'Error creating project', error });
+  }
+});
+
+app.get('/api/projects/:id', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const project = await prisma.project.findUnique({
+      where: { id },
+      include: { owner: { select: { name: true } } }
+    });
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+    res.json(project);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching project', error });
+  }
+});
+
+app.patch('/api/projects/:id', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const { title } = req.body;
+    
+    // Check ownership
+    const project = await prisma.project.findUnique({ where: { id } });
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+    if (project.ownerId !== req.userId) return res.status(403).json({ message: 'Unauthorized' });
+
+    const updated = await prisma.project.update({
+      where: { id },
+      data: { title }
+    });
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ message: 'Error renaming project', error });
+  }
+});
+
+app.delete('/api/projects/:id', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    // Check ownership
+    const project = await prisma.project.findUnique({ where: { id } });
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+    if (project.ownerId !== req.userId) return res.status(403).json({ message: 'Unauthorized' });
+
+    await prisma.project.delete({ where: { id } });
+    res.json({ message: 'Project deleted' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error deleting project', error });
   }
 });
 
@@ -53,6 +119,14 @@ io.on('connection', (socket) => {
     socket.join(projectId);
     console.log(`User ${socket.id} joined project ${projectId}`);
     
+    // Load project data from DB
+    const project = await prisma.project.findUnique({
+      where: { id: projectId }
+    });
+    if (project && project.data) {
+      socket.emit('load-project', project.data);
+    }
+
     // Send existing comments to the user who just joined
     const comments = await prisma.comment.findMany({
       where: { projectId },
@@ -61,8 +135,20 @@ io.on('connection', (socket) => {
     socket.emit('load-comments', comments);
   });
 
-  socket.on('draw', (data: { projectId: string, drawingData: any }) => {
+  socket.on('draw', async (data: { projectId: string, drawingData: any, fullState?: any[] }) => {
     socket.to(data.projectId).emit('draw-update', data.drawingData);
+    
+    // Persist full state to DB if provided
+    if (data.fullState) {
+      try {
+        await prisma.project.update({
+          where: { id: data.projectId },
+          data: { data: data.fullState }
+        });
+      } catch (err) {
+        console.error('Error saving project state:', err);
+      }
+    }
   });
 
   socket.on('presence', (data: { projectId: string, x: number, y: number, color: string, name: string }) => {

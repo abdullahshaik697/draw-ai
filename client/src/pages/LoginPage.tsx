@@ -1,22 +1,27 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import { Palette, Mail, Lock, ArrowRight } from 'lucide-react';
+import { Palette, Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
 import axios from 'axios';
 
 const LoginPage = () => {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
+    setError('');
     try {
       const res = await axios.post('http://localhost:5000/api/auth/login', formData);
       localStorage.setItem('token', res.data.token);
       navigate('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Invalid email or password');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -70,10 +75,17 @@ const LoginPage = () => {
 
           <button 
             type="submit"
-            className="w-full bg-white text-black py-4 rounded-2xl font-bold text-lg hover:bg-zinc-200 transition-all flex items-center justify-center gap-2 group"
+            disabled={loading}
+            className={`w-full py-4 rounded-2xl font-bold text-lg transition-all flex items-center justify-center gap-2 group ${loading ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' : 'bg-white text-black hover:bg-zinc-200'}`}
           >
-            Log In
-            <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+            {loading ? (
+              <Loader2 size={20} className="animate-spin" />
+            ) : (
+              <>
+                Log In
+                <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+              </>
+            )}
           </button>
         </form>
 

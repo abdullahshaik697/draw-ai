@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
+import axios from 'axios';
 import { 
   Palette, MousePointer2, Square, Circle, Triangle, ArrowRight, 
   Undo2, Redo2, Download, ChevronLeft, Sparkles, Loader2, 
@@ -8,7 +9,7 @@ import {
   Move, Eraser, Image as ImageIcon, Plus, Globe, Layout, Smartphone,
   Zap, Wifi, Rocket as RocketIcon, Settings as SettingsIcon,
   Cpu as CpuIcon, Terminal, Mail, User, Heart, Star,
-  Briefcase, Coffee, Sun, Moon, Maximize2
+  Briefcase, Coffee, Sun, Moon, Maximize2, Save, Check, Edit3
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -36,7 +37,9 @@ const DrawingPage = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textInputRef = useRef<HTMLTextAreaElement>(null);
   const socketRef = useRef<Socket | null>(null);
+  const isRemoteUpdate = useRef(false);
   
+  const [projectTitle, setProjectTitle] = useState('Untitled Design');
   const [elements, setElements] = useState<Element[]>([]);
   const [redoStack, setRedoStack] = useState<Element[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -56,6 +59,33 @@ const DrawingPage = () => {
   const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(false);
   const [isAssetsOpen, setIsAssetsOpen] = useState(false);
   const [assetSearch, setAssetSearch] = useState('');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+
+  // Fetch project details on mount
+  useEffect(() => {
+    const fetchProject = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          navigate('/login');
+          return;
+        }
+        const res = await axios.get(`http://localhost:5000/api/projects/${projectId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setProjectTitle(res.data.title);
+      } catch (err: any) {
+        console.error('Error fetching project:', err);
+        if (err.response?.status === 401) {
+          localStorage.removeItem('token');
+          navigate('/login');
+        } else if (err.response?.status === 404) {
+          navigate('/dashboard');
+        }
+      }
+    };
+    fetchProject();
+  }, [projectId, navigate]);
 
   // Sync color AND stroke width to selected elements
   useEffect(() => {
@@ -82,6 +112,22 @@ const DrawingPage = () => {
     setElements(prev => [...prev, ...newElements]); setSelectedIds(newIds);
   };
 
+  const renameProject = async () => {
+    const newTitle = window.prompt('Enter new project name:', projectTitle);
+    if (!newTitle || newTitle === projectTitle) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      await axios.patch(`http://localhost:5000/api/projects/${projectId}`, 
+        { title: newTitle },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setProjectTitle(newTitle);
+    } catch (err) {
+      console.error('Error renaming project:', err);
+    }
+  };
+
   const moveElements = (dx: number, dy: number) => {
     setElements(prev => prev.map(el => {
       if (!selectedIds.includes(el.id)) return el;
@@ -90,24 +136,62 @@ const DrawingPage = () => {
     }));
   };
 
+  const handleManualSave = () => {
+    if (!socketRef.current) return;
+    setSaveStatus('saving');
+    socketRef.current.emit('draw', { projectId, drawingData: {}, fullState: elements });
+    setTimeout(() => {
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    }, 500);
+  };
+
+  useEffect(() => {
+    socketRef.current = io('http://localhost:5000');
+    socketRef.current.emit('join-project', projectId);
+    
+    // Load existing project data from DB
+    socketRef.current.on('load-project', (data: Element[]) => {
+      isRemoteUpdate.current = true;
+      setElements(data);
+      setTimeout(() => isRemoteUpdate.current = false, 100);
+    });
+
+    socketRef.current.on('draw-update', (el: Element) => {
+      isRemoteUpdate.current = true;
+      setElements(prev => {
+        const idx = prev.findIndex(e => e.id === el.id);
+        if (idx > -1) { const newArr = [...prev]; newArr[idx] = el; return newArr; }
+        return [...prev, el];
+      });
+      setTimeout(() => isRemoteUpdate.current = false, 100);
+    });
+    
+    return () => { socketRef.current?.disconnect(); };
+  }, [projectId]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (textInput || document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+      
       if (e.ctrlKey || e.metaKey) {
-        if (e.key === 'z') { e.preventDefault(); undo(); }
-        if (e.key === 'y') { e.preventDefault(); redo(); }
-        if (e.key === 'a') { e.preventDefault(); setSelectedIds(elements.map(el => el.id)); }
-        if (e.key === 'd') { e.preventDefault(); duplicate(); }
+        if (e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+        if (e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
+        if (e.key.toLowerCase() === 'a') { e.preventDefault(); setSelectedIds(elements.map(el => el.id)); }
+        if (e.key.toLowerCase() === 'd') { e.preventDefault(); duplicate(); }
       } else {
         const step = e.shiftKey ? 10 : 1;
         switch (e.key) {
-          case 'v': setTool('select'); break;
-          case 'p': case 'b': setTool('pen'); break;
-          case 'e': setTool('eraser'); break;
-          case 't': setTool('text'); break;
-          case 'm': setTool('magic'); break;
+          case 'v': case 'V': setTool('select'); break;
+          case 'p': case 'P': case 'b': case 'B': setTool('pen'); break;
+          case 'e': case 'E': setTool('eraser'); break;
+          case 't': case 'T': setTool('text'); break;
+          case 'm': case 'M': setTool('magic'); break;
           case 'Backspace': case 'Delete': 
-            if (selectedIds.length > 0) { setElements(prev => prev.filter(el => !selectedIds.includes(el.id))); setSelectedIds([]); }
+            if (selectedIds.length > 0) { 
+              setElements(prev => prev.filter(el => !selectedIds.includes(el.id))); 
+              setSelectedIds([]); 
+            }
             break;
           case 'ArrowUp': e.preventDefault(); moveElements(0, -step); break;
           case 'ArrowDown': e.preventDefault(); moveElements(0, step); break;
@@ -121,15 +205,17 @@ const DrawingPage = () => {
   }, [elements, selectedIds, textInput]);
 
   useEffect(() => {
-    socketRef.current = io('http://localhost:5000');
-    socketRef.current.emit('join-project', projectId);
-    socketRef.current.on('draw-update', (el: Element) => setElements(prev => {
-      const idx = prev.findIndex(e => e.id === el.id);
-      if (idx > -1) { const newArr = [...prev]; newArr[idx] = el; return newArr; }
-      return [...prev, el];
-    }));
-    return () => { socketRef.current?.disconnect(); };
-  }, [projectId]);
+    const handleResize = () => render();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [elements, currentElement, zoom, offset, selectedIds, textInput, lineWidth]);
+
+  // Persist full state to DB when elements change locally
+  useEffect(() => {
+    if (socketRef.current && elements.length > 0 && !isRemoteUpdate.current) {
+      socketRef.current.emit('draw', { projectId, drawingData: {}, fullState: elements });
+    }
+  }, [elements]);
 
   useEffect(() => { render(); }, [elements, currentElement, zoom, offset, selectedIds, textInput, lineWidth]);
 
@@ -179,7 +265,7 @@ const DrawingPage = () => {
       const path = ICON_PATHS[el.iconName];
       if (path) {
         ctx.save();
-        ctx.lineWidth = el.lineWidth / 2; // Keep icons slightly thinner but adjustable
+        ctx.lineWidth = el.lineWidth / 2;
         ctx.translate(el.x, el.y);
         const scaleX = (el.width || 50) / 24;
         const scaleY = (el.height || 50) / 24;
@@ -243,22 +329,44 @@ const DrawingPage = () => {
   const handleMouseMove = (e: React.MouseEvent) => {
     if (isPanning) { setOffset(prev => ({ x: prev.x + e.movementX, y: prev.y + e.movementY })); return; }
     let { x, y } = getScreenToCanvas(e.clientX, e.clientY);
+    
+    // Broadcast presence
+    if (socketRef.current) {
+        socketRef.current.emit('presence', { projectId, x, y, color, name: 'User' });
+    }
+
     if (isResizing && selectedIds.length === 1) {
       setElements(prev => prev.map(el => {
         if (el.id !== selectedIds[0]) return el;
         if (el.type === 'circle') return { ...el, radius: Math.sqrt(Math.pow(x-el.x!, 2) + Math.pow(y-el.y!, 2)) };
         if (el.type === 'text') { const newWidth = x - el.x!; const lines = (el.text || '').split('\n'); const maxLineChars = Math.max(...lines.map(l => l.length)) || 1; const newFontSize = newWidth / (maxLineChars * 0.6); return { ...el, lineWidth: Math.max(newFontSize / 6, 1) }; }
-        return { ...el, width: x - el.x!, height: y - el.y! };
+        
+        let newWidth = x - el.x!;
+        let newHeight = y - el.y!;
+        
+        if (e.shiftKey && el.type !== 'pen') {
+          const originalRatio = (el.width || 1) / (el.height || 1);
+          if (Math.abs(newWidth) > Math.abs(newHeight)) {
+            newHeight = newWidth / originalRatio;
+          } else {
+            newWidth = newHeight * originalRatio;
+          }
+        }
+        
+        return { ...el, width: newWidth, height: newHeight };
       })); return;
     }
     if (isDragging && selectedIds.length > 0) { const dx = x - dragOffset.x; const dy = y - dragOffset.y; moveElements(dx, dy); setDragOffset({ x, y }); return; }
     if (isDrawing && currentElement) {
       if (e.shiftKey) {
          if (currentElement.type === 'line' || currentElement.type === 'arrow') { const dx = Math.abs(x - currentElement.x!); const dy = Math.abs(y - currentElement.y!); if (dx > dy) y = currentElement.y!; else x = currentElement.x!; }
-         else if (currentElement.type === 'rect') { const size = Math.max(Math.abs(x - currentElement.x!), Math.abs(y - currentElement.y!)); x = currentElement.x! + size * Math.sign(x - currentElement.x!); y = currentElement.y! + size * Math.sign(y - currentElement.y!); }
+         else if (currentElement.type === 'rect' || currentElement.type === 'icon') { const size = Math.max(Math.abs(x - currentElement.x!), Math.abs(y - currentElement.y!)); x = currentElement.x! + size * Math.sign(x - currentElement.x!); y = currentElement.y! + size * Math.sign(y - currentElement.y!); }
       }
       if (currentElement.type === 'pen') setCurrentElement({ ...currentElement, points: [...(currentElement.points || []), { x, y }] });
       else setCurrentElement({ ...currentElement, width: x - (currentElement.x || 0), height: y - (currentElement.y || 0), radius: Math.sqrt(Math.pow(x-currentElement.x!, 2) + Math.pow(y-currentElement.y!, 2)) });
+      
+      // Real-time broadcast (temporary preview)
+      socketRef.current?.emit('draw', { projectId, drawingData: currentElement });
     }
   };
 
@@ -283,29 +391,38 @@ const DrawingPage = () => {
   return (
     <div className="h-screen bg-[#0a0a0a] overflow-hidden flex flex-col select-none" onWheel={(e) => { if (e.ctrlKey) setZoom(prev => Math.min(Math.max(prev * (e.deltaY > 0 ? 0.9 : 1.1), 0.1), 5)); else setOffset(prev => ({ x: prev.x - e.deltaX, y: prev.y - e.deltaY })); }}>
       <header className="h-16 bg-[#141414]/80 backdrop-blur-md border-b border-zinc-800 flex items-center justify-between px-6 z-50">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/dashboard')} className="p-2 hover:bg-zinc-800 rounded-xl text-zinc-400 hover:text-white transition-colors"><ChevronLeft size={20} /></button>
-          <div className="h-8 w-[1px] bg-zinc-800" />
-          <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-zinc-800">
-            <ToolIcon icon={<MousePointer2 size={18} />} active={tool === 'select'} onClick={() => setTool('select')} label="Select" />
-            <ToolIcon icon={<Palette size={18} />} active={tool === 'pen'} onClick={() => setTool('pen')} label="Brush" />
-            <ToolIcon icon={<Eraser size={18} />} active={tool === 'eraser'} onClick={() => setTool('eraser')} label="Eraser" />
-            <ToolIcon icon={<Wand2 size={18} />} active={tool === 'magic'} onClick={() => setTool('magic')} label="AI Magic" />
-          </div>
-          <div className="h-8 w-[1px] bg-zinc-800" />
-          <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-zinc-800">
-            <ToolIcon icon={<Undo2 size={18} />} onClick={undo} label="Undo" active={false} />
-            <ToolIcon icon={<Redo2 size={18} />} onClick={redo} label="Redo" active={false} />
+        <div className="flex items-center gap-4 min-w-0 flex-1">
+          <button onClick={() => navigate('/dashboard')} className="p-2 hover:bg-zinc-800 rounded-xl text-zinc-400 hover:text-white transition-colors flex-shrink-0"><ChevronLeft size={20} /></button>
+          <div className="h-8 w-[1px] bg-zinc-800 flex-shrink-0" />
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-bold text-white truncate max-w-[200px]">{projectTitle}</h2>
+              <button onClick={renameProject} className="text-zinc-500 hover:text-white transition-colors"><Edit3 size={14} /></button>
+            </div>
+            <span className="text-[10px] text-zinc-500 font-medium">Design Project</span>
           </div>
         </div>
-        <div className="flex items-center gap-3 bg-zinc-900/50 p-1.5 rounded-2xl border border-zinc-800">
+
+        <div className="flex items-center gap-3 bg-zinc-900/50 p-1.5 rounded-2xl border border-zinc-800 mx-4">
+           <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-zinc-800">
+             <ToolIcon icon={<MousePointer2 size={18} />} active={tool === 'select'} onClick={() => setTool('select')} label="Select" />
+             <ToolIcon icon={<Palette size={18} />} active={tool === 'pen'} onClick={() => setTool('pen')} label="Brush" />
+             <ToolIcon icon={<Eraser size={18} />} active={tool === 'eraser'} onClick={() => setTool('eraser')} label="Eraser" />
+             <ToolIcon icon={<Wand2 size={18} />} active={tool === 'magic'} onClick={() => setTool('magic')} label="AI Magic" />
+           </div>
+           <div className="w-[1px] h-4 bg-zinc-800" />
+           <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-zinc-800">
+             <ToolIcon icon={<Undo2 size={18} />} onClick={undo} label="Undo" active={false} />
+             <ToolIcon icon={<Redo2 size={18} />} onClick={redo} label="Redo" active={false} />
+           </div>
+           <div className="w-[1px] h-4 bg-zinc-800" />
            <div className="flex items-center gap-2 px-2">
              <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="w-6 h-6 bg-transparent border-none cursor-pointer" title="Stroke Color" />
            </div>
            <div className="w-[1px] h-4 bg-zinc-800" />
            <div className="flex items-center gap-3 px-3 group/stroke">
              <Maximize2 size={14} className="text-zinc-500 group-hover/stroke:text-purple-400 transition-colors" />
-             <input type="range" min="1" max="20" value={lineWidth} onChange={(e) => setLineWidth(parseInt(e.target.value))} className="w-24 accent-purple-500 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer" title="Stroke Width" />
+             <input type="range" min="1" max="20" value={lineWidth} onChange={(e) => setLineWidth(parseInt(e.target.value))} className="w-20 accent-purple-500 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer" title="Stroke Width" />
              <span className="text-[10px] font-bold text-zinc-500 w-4">{lineWidth}</span>
            </div>
            <div className="w-[1px] h-4 bg-zinc-800" />
@@ -317,9 +434,17 @@ const DrawingPage = () => {
            <div className="w-[1px] h-4 bg-zinc-800" />
            <button onClick={() => setTool('hand')} className={`p-2 rounded-xl ${tool === 'hand' ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'}`}><Move size={18} /></button>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setIsAssetsOpen(!isAssetsOpen)} className={`p-2.5 rounded-xl flex items-center gap-2 font-bold text-xs ${isAssetsOpen ? 'bg-purple-600 text-white' : 'bg-zinc-900 text-zinc-400 border border-zinc-800'}`}><ImageIcon size={16} /> Assets</button>
-          <button onClick={() => setIsAiSidebarOpen(!isAiSidebarOpen)} className={`p-2.5 rounded-xl flex items-center gap-2 font-bold text-xs ${isAiSidebarOpen ? 'bg-purple-600 text-white' : 'bg-zinc-900 text-zinc-400 border border-zinc-800'}`}><Sparkles size={16} /> AI Assistant</button>
+
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button 
+            onClick={handleManualSave} 
+            className={`p-2.5 rounded-xl flex items-center gap-2 font-bold text-xs transition-all ${saveStatus === 'saved' ? 'bg-green-600 text-white' : 'bg-zinc-900 text-zinc-400 border border-zinc-800 hover:bg-zinc-800'}`}
+          >
+            {saveStatus === 'saving' ? <Loader2 size={16} className="animate-spin" /> : saveStatus === 'saved' ? <Check size={16} /> : <Save size={16} />}
+            {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved!' : 'Save'}
+          </button>
+          <button onClick={() => setIsAssetsOpen(!isAssetsOpen)} className={`p-2.5 rounded-xl flex items-center gap-2 font-bold text-xs ${isAssetsOpen ? 'bg-purple-600 text-white' : 'bg-zinc-900 text-zinc-400 border border-zinc-800 hover:bg-zinc-800'}`}><ImageIcon size={16} /> Assets</button>
+          <button onClick={() => setIsAiSidebarOpen(!isAiSidebarOpen)} className={`p-2.5 rounded-xl flex items-center gap-2 font-bold text-xs ${isAiSidebarOpen ? 'bg-purple-600 text-white' : 'bg-zinc-900 text-zinc-400 border border-zinc-800 hover:bg-zinc-800'}`}><Sparkles size={16} /> AI Assistant</button>
         </div>
       </header>
       <div className="flex-1 flex overflow-hidden relative">
