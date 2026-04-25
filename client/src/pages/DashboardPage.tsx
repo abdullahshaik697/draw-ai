@@ -1,91 +1,66 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, LayoutGrid, List, MoreVertical, Palette, Trash2, ExternalLink, Clock, Edit2 } from 'lucide-react';
+import { Plus, Search, LayoutGrid, List, MoreVertical, Palette, Trash2, ExternalLink, Clock, Edit2, User } from 'lucide-react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 const DashboardPage = () => {
   const [projects, setProjects] = useState([]);
+  const [userData, setUserData] = useState<{ name: string, email: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const fetchProjects = async () => {
+  const fetchDashboardData = async () => {
     try {
       const token = localStorage.getItem('token');
-      if (!token) {
-        navigate('/login');
-        return;
-      }
+      if (!token) { navigate('/login'); return; }
       const res = await axios.get('http://localhost:5000/api/dashboard', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setProjects(res.data);
+      setProjects(res.data.projects);
+      setUserData(res.data.user);
     } catch (err: any) {
       console.error(err);
-      if (err.response?.status === 401) {
-        localStorage.removeItem('token');
-        navigate('/login');
-      }
-    } finally {
-      setLoading(false);
-    }
+      if (err.response?.status === 401) { localStorage.removeItem('token'); navigate('/login'); }
+    } finally { setLoading(false); }
   };
 
-  useEffect(() => {
-    fetchProjects();
-  }, []);
+  useEffect(() => { fetchDashboardData(); }, []);
 
   const createNewProject = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.post('http://localhost:5000/api/projects', 
-        { title: 'Untitled Design' },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await axios.post('http://localhost:5000/api/projects', { title: 'Untitled Design' }, { headers: { Authorization: `Bearer ${token}` } });
       navigate(`/draw/${res.data.id}`);
-    } catch (err) {
-      console.error('Error creating project:', err);
-      const id = Math.random().toString(36).substring(7);
-      navigate(`/draw/${id}`);
-    }
+    } catch (err) { navigate(`/draw/${Math.random().toString(36).substring(7)}`); }
   };
 
   const deleteProject = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this project?')) return;
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`http://localhost:5000/api/projects/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await axios.delete(`http://localhost:5000/api/projects/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       setProjects(prev => prev.filter((p: any) => p.id !== id));
       setMenuOpenId(null);
-    } catch (err) {
-      console.error('Error deleting project:', err);
-    }
+    } catch (err) { console.error('Error deleting project:', err); }
   };
 
   const renameProject = async (id: string, currentTitle: string) => {
     const newTitle = window.prompt('Enter new project name:', currentTitle);
     if (!newTitle || newTitle === currentTitle) return;
-
     try {
       const token = localStorage.getItem('token');
-      await axios.patch(`http://localhost:5000/api/projects/${id}`, 
-        { title: newTitle },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await axios.patch(`http://localhost:5000/api/projects/${id}`, { title: newTitle }, { headers: { Authorization: `Bearer ${token}` } });
       setProjects(prev => prev.map((p: any) => p.id === id ? { ...p, title: newTitle } : p));
       setMenuOpenId(null);
-    } catch (err) {
-      console.error('Error renaming project:', err);
-    }
+    } catch (err) { console.error('Error renaming project:', err); }
   };
 
   return (
     <div className="min-h-screen bg-[#050505] text-white p-6 md:p-12" onClick={() => setMenuOpenId(null)}>
       <div className="max-w-6xl mx-auto">
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-16">
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 mb-16">
           <div className="flex items-center gap-5">
             <div className="w-14 h-14 bg-gradient-to-tr from-purple-600 to-blue-500 rounded-2xl flex items-center justify-center shadow-2xl shadow-purple-500/20 rotate-3 flex-shrink-0">
               <Palette size={32} className="text-white" />
@@ -95,125 +70,125 @@ const DashboardPage = () => {
               <p className="text-zinc-500 font-medium">Your creative workspace</p>
             </div>
           </div>
-          
-          <button 
-            onClick={createNewProject}
-            className="bg-white text-black px-8 py-4 rounded-2xl font-bold flex items-center gap-3 hover:scale-105 active:scale-95 transition-all shadow-[0_0_40px_rgba(255,255,255,0.1)] group"
-          >
-            <Plus size={22} className="group-hover:rotate-90 transition-transform duration-300" />
-            Create Project
-          </button>
+
+          <div className="flex items-center gap-6 bg-white/5 p-2 pr-6 rounded-[2rem] border border-white/5 backdrop-blur-xl">
+             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-zinc-800 to-black border border-white/10 flex items-center justify-center text-zinc-400">
+               <User size={24} />
+             </div>
+             <div className="flex flex-col">
+               <span className="text-sm font-black uppercase tracking-widest text-white">{userData?.name || 'Designer'}</span>
+               <span className="text-[10px] font-bold text-zinc-500 truncate max-w-[150px]">{userData?.email || 'Loading profile...'}</span>
+             </div>
+             <div className="h-8 w-[1px] bg-white/10 mx-2" />
+             <button onClick={createNewProject} className="bg-white text-black hover:bg-zinc-200 px-6 py-3 rounded-[1.5rem] font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-white/5 flex items-center gap-2">
+               <Plus size={16} /> New Project
+             </button>
+          </div>
         </header>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          {/* Create New Card */}
-          <motion.div 
-            whileHover={{ y: -8, borderColor: '#a855f7' }}
-            onClick={(e) => { e.stopPropagation(); createNewProject(); }}
-            className="aspect-[1.4/1] bg-zinc-900/20 border-2 border-dashed border-zinc-800/50 rounded-[2.5rem] flex flex-col items-center justify-center gap-5 cursor-pointer hover:bg-purple-500/5 transition-all group"
-          >
-            <div className="w-16 h-16 bg-zinc-900 rounded-3xl flex items-center justify-center group-hover:scale-110 group-hover:bg-purple-600/20 transition-all shadow-inner">
-              <Plus size={32} className="text-zinc-600 group-hover:text-purple-400" />
-            </div>
-            <div className="text-center">
-              <span className="block font-bold text-lg text-zinc-400 group-hover:text-purple-300">New Design</span>
-              <span className="text-xs text-zinc-600">Start from a blank canvas</span>
-            </div>
-          </motion.div>
-
-          {projects.map((project: any) => (
-            <ProjectCard 
-              key={project.id} 
-              project={project} 
-              isMenuOpen={menuOpenId === project.id}
-              onMenuToggle={(e) => { 
-                e.stopPropagation(); 
-                setMenuOpenId(menuOpenId === project.id ? null : project.id); 
-              }}
-              onOpen={() => navigate(`/draw/${project.id}`)}
-              onDelete={() => deleteProject(project.id)}
-              onRename={() => renameProject(project.id, project.title)}
-            />
-          ))}
-        </div>
-
-        {loading && (
-          <div className="flex justify-center mt-32">
-            <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin shadow-2xl shadow-purple-500/50" />
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {[1, 2, 3].map(i => <div key={i} className="h-64 bg-white/5 rounded-3xl animate-pulse" />)}
           </div>
-        )}
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <AnimatePresence>
+              {projects.map((project: any) => (
+                <motion.div
+                  key={project.id}
+                  layout
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="group relative aspect-[1.4/1] bg-[#0d0d0d] rounded-[2.5rem] border border-white/5 p-8 hover:border-purple-500/50 hover:bg-[#111] transition-all duration-500"
+                  style={{ zIndex: menuOpenId === project.id ? 50 : 1 }}
+                >
+                  {project.isShared && (
+                    <div className="absolute top-6 left-6 px-3 py-1 bg-blue-600/20 border border-blue-500/30 rounded-full flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                      <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest">Shared</span>
+                    </div>
+                  )}
 
-        {!loading && projects.length === 0 && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center mt-20 py-32 bg-zinc-900/10 rounded-[3.5rem] border border-zinc-800/30 backdrop-blur-sm">
-            <Palette size={64} className="mx-auto text-zinc-800 mb-6" />
-            <p className="text-zinc-500 text-xl font-medium">No projects yet. Your masterpieces will appear here!</p>
-          </motion.div>
+                  <div className="flex flex-col h-full justify-between">
+                    <div className="flex justify-end relative">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setMenuOpenId(menuOpenId === project.id ? null : project.id); }}
+                        className="p-3 text-zinc-500 hover:text-white hover:bg-white/5 rounded-2xl transition-all"
+                      >
+                        <MoreVertical size={20} />
+                      </button>
+
+                      <AnimatePresence>
+                        {menuOpenId === project.id && (
+                          <motion.div 
+                            initial={{ opacity: 0, scale: 0.9, y: -10 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: -10 }}
+                            className="absolute top-14 right-0 w-56 bg-[#1a1a1a] border border-white/10 rounded-3xl p-3 shadow-2xl z-[100] backdrop-blur-2xl"
+                          >
+                            <button onClick={() => navigate(`/draw/${project.id}`)} className="w-full flex items-center gap-3 p-3 text-zinc-400 hover:text-white hover:bg-white/5 rounded-2xl transition-all font-bold text-xs">
+                              <ExternalLink size={16} /> Open Design
+                            </button>
+                            
+                            {!project.isShared && (
+                              <>
+                                <button onClick={() => renameProject(project.id, project.title)} className="w-full flex items-center gap-3 p-3 text-zinc-400 hover:text-white hover:bg-white/5 rounded-2xl transition-all font-bold text-xs">
+                                  <Edit2 size={16} /> Rename
+                                </button>
+                                <div className="h-[1px] bg-white/5 my-2" />
+                                <button onClick={() => deleteProject(project.id)} className="w-full flex items-center gap-3 p-3 text-red-500/70 hover:text-red-500 hover:bg-red-500/10 rounded-2xl transition-all font-bold text-xs">
+                                  <Trash2 size={16} /> Delete Forever
+                                </button>
+                              </>
+                            )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <h3 className="text-xl font-black text-white group-hover:text-purple-400 transition-colors truncate pr-8">{project.title}</h3>
+                        <div className="flex items-center gap-2 text-zinc-600 text-[10px] font-bold uppercase tracking-widest">
+                          <Clock size={12} />
+                          <span>Updated {new Date(project.updatedAt).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 pt-4 border-t border-white/5">
+                        <div className="w-8 h-8 rounded-full bg-zinc-800 border border-white/5 flex items-center justify-center text-[10px] font-black text-zinc-500">
+                          {project.owner.name[0]}
+                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-tighter text-zinc-500">
+                          {project.owner.name}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+
+            {projects.length === 0 && (
+              <div className="col-span-full py-32 flex flex-col items-center justify-center text-zinc-700 space-y-6">
+                <div className="w-24 h-24 bg-white/5 rounded-[2.5rem] flex items-center justify-center border border-dashed border-white/10">
+                  <Plus size={40} className="opacity-20" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-black uppercase tracking-[0.3em] mb-2">Workspace Empty</p>
+                  <p className="text-xs font-medium opacity-50">Start your creative journey by creating a new project</p>
+                </div>
+                <button onClick={createNewProject} className="px-8 py-4 bg-white text-black rounded-[2rem] font-black text-xs uppercase tracking-widest hover:scale-105 transition-all">
+                  Create First Project
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
   );
 };
-
-const ProjectCard = ({ project, isMenuOpen, onMenuToggle, onOpen, onDelete, onRename }: any) => (
-  <motion.div 
-    whileHover={{ y: -8 }}
-    onClick={onOpen}
-    className={`aspect-[1.4/1] bg-[#0d0d0d] border border-zinc-800/80 rounded-[2.5rem] group cursor-pointer hover:border-zinc-700/50 hover:shadow-2xl hover:shadow-purple-500/5 transition-all relative flex flex-col ${isMenuOpen ? 'z-50' : 'z-0'}`}
-  >
-    {/* Preview Area */}
-    <div className="relative h-[65%] w-full bg-gradient-to-br from-zinc-900 to-black rounded-t-[2.5rem] overflow-hidden flex items-center justify-center">
-       <div className="absolute inset-0 opacity-10 group-hover:opacity-20 transition-opacity">
-         <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,#a855f7_0%,transparent_50%)]" />
-       </div>
-       <Palette size={50} className="text-zinc-800 group-hover:text-purple-500/30 group-hover:scale-110 transition-all duration-500" />
-    </div>
-
-    {/* Menu Button & Dropdown (OUTSIDE overflow containers) */}
-    <div className="absolute top-5 right-5 z-[100]">
-      <button 
-        onClick={onMenuToggle}
-        className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${isMenuOpen ? 'bg-purple-600 text-white scale-110 shadow-lg shadow-purple-500/40' : 'bg-black/40 text-zinc-400 hover:bg-black/60 hover:text-white backdrop-blur-md border border-white/5'}`}
-      >
-        <MoreVertical size={18} />
-      </button>
-      
-      <AnimatePresence>
-        {isMenuOpen && (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9, x: 10, y: -10 }}
-            animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, x: 10, y: -10 }}
-            className="absolute right-0 mt-3 w-40 bg-[#1a1a1a] border border-zinc-800 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,1)] z-[110] overflow-hidden backdrop-blur-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button onClick={onOpen} className="w-full px-5 py-4 text-sm font-bold flex items-center gap-3 hover:bg-zinc-800 transition-colors text-white border-b border-zinc-800/50">
-              <ExternalLink size={16} className="text-purple-400" /> Open
-            </button>
-            <button onClick={onRename} className="w-full px-5 py-4 text-sm font-bold flex items-center gap-3 hover:bg-zinc-800 transition-colors text-white border-b border-zinc-800/50">
-              <Edit2 size={16} className="text-blue-400" /> Rename
-            </button>
-            <button onClick={onDelete} className="w-full px-5 py-4 text-sm font-bold flex items-center gap-3 hover:bg-red-600 transition-colors text-white">
-              <Trash2 size={16} /> Delete
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-
-    {/* Content Area */}
-    <div className="p-6 flex flex-col justify-between flex-1 bg-gradient-to-b from-[#0d0d0d] to-black rounded-b-[2.5rem]">
-      <h3 className="font-bold text-xl text-white truncate group-hover:text-purple-400 transition-colors">{project.title || 'Untitled Design'}</h3>
-      <div className="flex justify-between items-center mt-2">
-        <div className="flex items-center gap-2 text-zinc-500">
-          <Clock size={14} />
-          <span className="text-xs font-medium">{new Date(project.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
-        </div>
-        <div className="flex -space-x-2">
-          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 border-2 border-black shadow-lg" />
-        </div>
-      </div>
-    </div>
-  </motion.div>
-);
 
 export default DashboardPage;

@@ -1,96 +1,82 @@
-# 🎨 Collaborative Whiteboard Engine
+# 🎨 DrawAI - Premium Collaborative Design Engine
 
-A professional-grade, real-time collaborative whiteboard built with React, Vite, and Socket.io. This tool provides a high-fidelity design environment with precision drawing, asset management, and desktop-grade keyboard shortcuts.
+DrawAI is a high-fidelity, real-time collaborative vector drawing platform built for modern teams. It combines the power of a professional design tool with the seamless synchronization of a collaborative workspace.
 
+![Premium Design](https://img.shields.io/badge/Aesthetics-Premium-blueviolet?style=for-the-badge)
+![Security](https://img.shields.io/badge/Security-Hardened-green?style=for-the-badge)
+![Real-time](https://img.shields.io/badge/Collaboration-Real--time-orange?style=for-the-badge)
 
 ## 🚀 Key Features
 
-- **Advanced Drawing Tools**:
-  - Precision Pen & Brush tools.
-  - Geometry: Rectangles, Circles, Triangles.
-  - Connectors: Dynamic Lines and Arrows.
-  - Multiline Text support (Shift + Enter).
-- **Professional Asset Library**:
-  - Searchable SVG icon library (Rocket, CPU, Server, etc.).
-  - Icons are treated as vector objects (resizable and colorable).
-- **Design Interactions**:
-  - **Zoom & Pan**: Smooth navigation across an infinite-feeling grid.
-  - **Precision Resizing**: Individual handles for high-fidelity control.
-  - **Color & Stroke Sync**: Live updates for selected elements.
-- **Desktop-Grade Shortcuts**:
-  - `Ctrl + D`: Duplicate Selection.
-  - `Ctrl + A`: Select All.
-  - `Ctrl + Z / Y`: Undo / Redo.
-  - `Arrow Keys`: 1px Nudging (Shift for 10px).
-  - `V, P, E, T, M`: Instant tool switching.
-  - `Shift + Draw`: Snap to straight lines and perfect squares.
+### 🛠️ Advanced Vector Engine
+- **Versatile Toolset**: Pen, Rectangles, Circles, Triangles, Lines, Arrows, and rich Text support.
+- **Smart Selection**: Selecting an element automatically syncs the toolbar to its properties (color, stroke width).
+- **Infinite Navigation**: High-performance Zoom-to-Cursor and Panning (Middle-click or Spacebar).
+- **Proportional Scaling**: Hold `Shift` for perfect squares, circles, and aspect-ratio locked resizing.
+
+### 👥 Collaborative Workspace
+- **Access Management**: Invite teammates by email and manage permissions from a unified dashboard.
+- **Real-time Sync**: Experience buttery-smooth canvas updates and presence tracking.
+- **Discussion Panel**: Contextual real-time chat for seamless team communication.
+- **Role-based Security**: Only owners can rename, delete, or manage project access.
+
+### 🔄 Advanced History System
+- **Full-State Undo/Redo**: Every action—including color changes, resizing, and moving—is fully reversible.
+- **Snapshots**: Smart debouncing ensures a smooth history timeline without performance lag.
+
+### 🛡️ Hardened Security
+- **Authenticated WebSockets**: Every real-time connection is verified via JWT to prevent unauthorized access.
+- **Strict Access Control**: Server-side verification for every project interaction (API & Socket).
+- **Security Headers**: Integrated Helmet.js protection against common web vulnerabilities.
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: React, Vite, Tailwind CSS, Framer Motion.
-- **Canvas Engine**: HTML5 Canvas API with Path2D vector rendering.
-- **Icons**: Lucide-React & Custom SVG Paths.
+- **Frontend**: React, Vite, Framer Motion, Lucide Icons, Axios.
+- **Backend**: Node.js, Express, Socket.io, JWT.
+- **Database**: PostgreSQL (Neon), Prisma ORM.
+- **Security**: Helmet, BCryptJS, JWT-Auth.
 
-## 📦 Getting Started
-
-### 1. Clone the repository
-```bash
-git clone https://github.com/yourusername/drawing-app.git
-cd drawing-app
-```
-
-### 2. Setup the Server
-```bash
-cd server
-npm install
-npm start
-```
-
-### 3. Setup the Client
-```bash
-cd client
-npm install
-npm run dev
-```
-
-The app will be available at `http://localhost:5173`.
-
-## ⌨️ Keyboard Shortcuts Reference
+## ⌨️ Keyboard Shortcuts
 
 | Shortcut | Action |
 | :--- | :--- |
-| `Ctrl + D` | **Duplicate** selected elements |
-| `Ctrl + A` | **Select All** elements |
-| `Ctrl + Z / Y` | **Undo / Redo** actions |
-| `Arrows` | **Nudge** selection (1px) |
-| `Shift + Arrows` | **Move** selection (10px) |
-| `V` | **Select** Tool |
-| `P / B` | **Brush / Pen** Tool |
-| `E` | **Eraser** Tool |
-| `T` | **Text** Tool |
-| `M` | **Magic AI** Tool |
-| `Shift + Drag` | **Snap** to lines/squares |
+| **V** | Select Tool |
+| **H / Space** | Hand Tool (Pan) |
+| **P / B** | Brush (Pen) Tool |
+| **T** | Text Tool |
+| **Ctrl + Z** | Undo Action |
+| **Ctrl + Y** | Redo Action |
+| **Ctrl + A** | Select All Elements |
+| **Ctrl + D** | Duplicate Selection |
+| **Delete / Backspace**| Remove Selected Elements |
+| **Arrows** | Nudge Selection (1px / 10px with Shift) |
+| **Ctrl + Wheel** | Zoom in / out |
 
-## 📂 Project Structure
+## 🏗️ Installation & Setup
 
-```text
-├── client/
-│   ├── src/
-│   │   ├── pages/         # Core Whiteboard Page (DrawingPage.tsx)
-│   │   ├── icons/         # Modular SVG Library (iconLibrary.ts)
-│   │   └── components/    # Reusable UI Components
-├── server/
-│   └── server.js          # Socket.io & Real-time logic
-└── README.md              # Documentation
-```
+1. **Clone the Repository**:
+   ```bash
+   git clone <repository-url>
+   cd drawing_app
+   ```
 
-## 🤝 Contributing
+2. **Server Configuration**:
+   ```bash
+   cd server
+   npm install
+   # Create a .env file with DATABASE_URL, DIRECT_URL, JWT_SECRET, and GROQ_API_KEY
+   npx prisma generate
+   npm run dev
+   ```
 
-Contributions are welcome! Feel free to open an issue or submit a pull request for new features like:
-- PostgreSQL/Prisma persistence.
-- Image uploads.
-- Export to PNG/SVG.
-- More AI design suggestions.
+3. **Client Configuration**:
+   ```bash
+   cd client
+   npm install
+   npm run dev
+   ```
 
----
-Built with ❤️ by abdullahshaik697
+## 📄 License
+This project is licensed under the ISC License. Built with ❤️ for creative teams.
+
+Made with ❤️ by abdullahshaik697
